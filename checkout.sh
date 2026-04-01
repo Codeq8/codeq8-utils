@@ -7,7 +7,18 @@ repo_https="https://github.com/${GITHUB_REPOSITORY}.git"
 repo_auth="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 target_sha="${CODE_BOOTSTRAP_TARGET_SHA:-${GITHUB_SHA}}"
 fallback_ref="${CODE_BOOTSTRAP_FALLBACK_REF:-${GITHUB_REF:-}}"
+requested_ref="${CODE_BOOTSTRAP_REQUESTED_REF:-}"
+requested_sha="${CODE_BOOTSTRAP_REQUESTED_SHA:-}"
 sync_lfs="${CODE_BOOTSTRAP_SYNC_LFS:-false}"
+
+if [ -n "$requested_ref" ]; then
+  fallback_ref="$requested_ref"
+fi
+if [ -n "$requested_sha" ]; then
+  target_sha="$requested_sha"
+elif [ -n "$requested_ref" ]; then
+  target_sha=""
+fi
 
 restore_origin_url() {
   if [ -d "$workspace/.git" ]; then
@@ -69,11 +80,41 @@ fetch_sha_with_lock_recovery() {
   return 1
 }
 
+fetch_ref_with_lock_recovery() {
+  local ref="$1"
+  local max_attempts=5
+  local attempt=1
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    wait_for_shallow_lock_release || return 1
+
+    if git fetch --no-tags --depth=1 origin "$ref"; then
+      return 0
+    fi
+
+    if [ "$attempt" -eq "$max_attempts" ]; then
+      break
+    fi
+
+    echo "::warning::git fetch failed for ${ref} (attempt ${attempt}/${max_attempts}); retrying..."
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+
+  echo "::error::Unable to fetch ${ref} after ${max_attempts} attempts."
+  return 1
+}
+
 if [ -d "$workspace/.git" ]; then
   cd "$workspace"
   git remote set-url origin "$repo_auth"
-  fetch_sha_with_lock_recovery "$target_sha" "$fallback_ref"
-  git checkout -f "$target_sha"
+  if [ -n "$target_sha" ]; then
+    fetch_sha_with_lock_recovery "$target_sha" "$fallback_ref"
+    git checkout -f "$target_sha"
+  else
+    fetch_ref_with_lock_recovery "$fallback_ref"
+    git checkout -f FETCH_HEAD
+  fi
   git remote set-url origin "$repo_https"
 else
   if [ -d "$workspace" ] && [ -n "$(ls -A "$workspace" 2>/dev/null)" ]; then
@@ -85,8 +126,13 @@ else
   mkdir -p "$workspace"
   git clone "$repo_auth" "$workspace"
   cd "$workspace"
-  fetch_sha_with_lock_recovery "$target_sha" "$fallback_ref"
-  git checkout -f "$target_sha"
+  if [ -n "$target_sha" ]; then
+    fetch_sha_with_lock_recovery "$target_sha" "$fallback_ref"
+    git checkout -f "$target_sha"
+  else
+    fetch_ref_with_lock_recovery "$fallback_ref"
+    git checkout -f FETCH_HEAD
+  fi
   git remote set-url origin "$repo_https"
 fi
 

@@ -5,6 +5,14 @@ inputs:
   github_token:
     description: GitHub token used to fetch the target repository.
     required: true
+  requested_ref:
+    description: Optional ref requested by a repository_dispatch payload.
+    required: false
+    default: ""
+  requested_sha:
+    description: Optional commit SHA requested by a repository_dispatch payload.
+    required: false
+    default: ""
   target_sha:
     description: Exact commit SHA to checkout.
     required: false
@@ -25,6 +33,8 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
+        CODE_BOOTSTRAP_REQUESTED_REF: ${{ inputs.requested_ref }}
+        CODE_BOOTSTRAP_REQUESTED_SHA: ${{ inputs.requested_sha }}
         CODE_BOOTSTRAP_TARGET_SHA: ${{ inputs.target_sha }}
         CODE_BOOTSTRAP_FALLBACK_REF: ${{ inputs.fallback_ref }}
         CODE_BOOTSTRAP_SYNC_LFS: ${{ inputs.sync_lfs }}
