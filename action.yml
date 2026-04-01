@@ -1,0 +1,33 @@
+name: Codeq8 Persistent Workspace Checkout
+description: Sync a persistent self-hosted workspace to the requested Git SHA without cleaning ignored files.
+
+inputs:
+  github_token:
+    description: GitHub token used to fetch the target repository.
+    required: true
+  target_sha:
+    description: Exact commit SHA to checkout.
+    required: false
+    default: ""
+  fallback_ref:
+    description: Fallback ref to fetch if the target SHA is unavailable.
+    required: false
+    default: ""
+  sync_lfs:
+    description: Whether to sync Git LFS assets after checkout without modifying repo hooks.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Bootstrap persistent workspace checkout
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CODE_BOOTSTRAP_TARGET_SHA: ${{ inputs.target_sha }}
+        CODE_BOOTSTRAP_FALLBACK_REF: ${{ inputs.fallback_ref }}
+        CODE_BOOTSTRAP_SYNC_LFS: ${{ inputs.sync_lfs }}
+      run: |
+        set -euo pipefail
+        bash "$GITHUB_ACTION_PATH/checkout.sh"
