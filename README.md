@@ -18,6 +18,7 @@ Behavior:
 - falls back to a requested or workflow ref when needed
 - restores the public `origin` URL after authenticated fetches
 - keeps ignored files in place instead of running `git clean -ffdx`
+- skips Git LFS smudge during checkout unless `sync_lfs` is `"true"`
 - optionally syncs Git LFS payloads
 
 Inputs:
@@ -40,4 +41,11 @@ Example:
     target_sha: ${{ github.sha }}
     fallback_ref: ${{ github.ref }}
     sync_lfs: "false"
+```
+
+## Validation
+
+```bash
+bash -n checkout.sh
+bash checkout.test.sh
 ```

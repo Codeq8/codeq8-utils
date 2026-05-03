@@ -11,6 +11,10 @@ requested_ref="${CODE_BOOTSTRAP_REQUESTED_REF:-}"
 requested_sha="${CODE_BOOTSTRAP_REQUESTED_SHA:-}"
 sync_lfs="${CODE_BOOTSTRAP_SYNC_LFS:-false}"
 
+if [ "$sync_lfs" != "true" ]; then
+  export GIT_LFS_SKIP_SMUDGE=1
+fi
+
 if [ -n "$requested_ref" ]; then
   fallback_ref="$requested_ref"
 fi
