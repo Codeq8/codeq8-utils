@@ -16,6 +16,8 @@ Behavior:
 - reuses the existing checkout in `GITHUB_WORKSPACE` when possible
 - fetches an explicit SHA when one is available
 - falls back to a requested or workflow ref when needed
+- refreshes full-history `origin/*` branch refs so later runner steps can compute merge bases
+- unshallows persistent workspaces left behind by older checkout runs
 - restores the public `origin` URL after authenticated fetches
 - keeps ignored files in place instead of running `git clean -ffdx`
 - skips Git LFS smudge during checkout unless `sync_lfs` is `"true"`

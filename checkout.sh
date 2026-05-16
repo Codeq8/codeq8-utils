@@ -63,11 +63,15 @@ fetch_sha_with_lock_recovery() {
   while [ "$attempt" -le "$max_attempts" ]; do
     wait_for_shallow_lock_release || return 1
 
-    if git fetch --no-tags --depth=1 origin "$sha"; then
+    if git cat-file -e "${sha}^{commit}" >/dev/null 2>&1; then
       return 0
     fi
 
-    if [ -n "$next_fallback_ref" ] && git fetch --no-tags --depth=1 origin "$next_fallback_ref"; then
+    if git fetch --no-tags origin "$sha"; then
+      return 0
+    fi
+
+    if [ -n "$next_fallback_ref" ] && git fetch --no-tags origin "$next_fallback_ref"; then
       return 0
     fi
 
@@ -92,7 +96,7 @@ fetch_ref_with_lock_recovery() {
   while [ "$attempt" -le "$max_attempts" ]; do
     wait_for_shallow_lock_release || return 1
 
-    if git fetch --no-tags --depth=1 origin "$ref"; then
+    if git fetch --no-tags origin "$ref"; then
       return 0
     fi
 
@@ -109,9 +113,39 @@ fetch_ref_with_lock_recovery() {
   return 1
 }
 
+refresh_branch_refs_with_lock_recovery() {
+  local max_attempts=5
+  local attempt=1
+  local branch_refspec="+refs/heads/*:refs/remotes/origin/*"
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    wait_for_shallow_lock_release || return 1
+
+    if [ -f "$workspace/.git/shallow" ]; then
+      if git fetch --no-tags --prune --unshallow origin "$branch_refspec"; then
+        return 0
+      fi
+    elif git fetch --no-tags --prune origin "$branch_refspec"; then
+      return 0
+    fi
+
+    if [ "$attempt" -eq "$max_attempts" ]; then
+      break
+    fi
+
+    echo "::warning::git branch ref refresh failed (attempt ${attempt}/${max_attempts}); retrying..."
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+
+  echo "::error::Unable to refresh origin branch refs after ${max_attempts} attempts."
+  return 1
+}
+
 if [ -d "$workspace/.git" ]; then
   cd "$workspace"
   git remote set-url origin "$repo_auth"
+  refresh_branch_refs_with_lock_recovery
   if [ -n "$target_sha" ]; then
     fetch_sha_with_lock_recovery "$target_sha" "$fallback_ref"
     git checkout -f "$target_sha"
@@ -128,8 +162,9 @@ else
   fi
 
   mkdir -p "$workspace"
-  git clone "$repo_auth" "$workspace"
+  git clone --no-tags "$repo_auth" "$workspace"
   cd "$workspace"
+  refresh_branch_refs_with_lock_recovery
   if [ -n "$target_sha" ]; then
     fetch_sha_with_lock_recovery "$target_sha" "$fallback_ref"
     git checkout -f "$target_sha"
