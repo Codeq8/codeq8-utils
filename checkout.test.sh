@@ -39,6 +39,24 @@ case "${1:-}" in
     fi
     exit 0
     ;;
+  ls-files)
+    if [ "${CODEQ8_TEST_LFS_MODE:-none}" = "tracked" ]; then
+      printf 'Assets/PlayerController.prefab\0'
+    elif [ "${CODEQ8_TEST_LFS_MODE:-none}" = "non-lfs" ]; then
+      printf 'src/index.js\0'
+    fi
+    exit 0
+    ;;
+  check-attr)
+    while IFS= read -r -d '' path; do
+      if [ "${CODEQ8_TEST_LFS_MODE:-none}" = "tracked" ]; then
+        printf '%s\0filter\0lfs\0' "$path"
+      else
+        printf '%s\0filter\0unspecified\0' "$path"
+      fi
+    done
+    exit 0
+    ;;
   lfs)
     exit 0
     ;;
@@ -52,6 +70,7 @@ chmod 700 "$fake_bin/git"
 run_checkout() {
   local sync_lfs="$1"
   local workspace_mode="${2:-fresh}"
+  local lfs_mode="${3:-none}"
 
   rm -rf "$workspace"
   : > "$git_log"
@@ -68,6 +87,7 @@ run_checkout() {
     GITHUB_TOKEN="token" \
     GITHUB_SHA="target-sha" \
     GITHUB_REF="refs/heads/main" \
+    CODEQ8_TEST_LFS_MODE="$lfs_mode" \
     CODE_BOOTSTRAP_SYNC_LFS="$sync_lfs" \
     bash "$repo_root/checkout.sh"
 }
@@ -98,3 +118,21 @@ grep -Fxq "clone --no-tags https://x-access-token:token@github.com/acme/widgets.
 grep -Fxq "fetch --no-tags --prune origin $branch_refspec|<unset>" "$git_log"
 grep -Fxq "fetch --no-tags origin target-sha|<unset>" "$git_log"
 grep -Fxq "checkout -f target-sha|<unset>" "$git_log"
+grep -Fxq "lfs pull|<unset>" "$git_log"
+
+run_checkout "auto" "fresh" "non-lfs"
+grep -Fxq "clone --no-tags https://x-access-token:token@github.com/acme/widgets.git $workspace|1" "$git_log"
+grep -Fxq "ls-files -z|1" "$git_log"
+grep -Fxq "check-attr -z --stdin filter|1" "$git_log"
+if grep -Fq "lfs " "$git_log"; then
+  echo "auto checkout should not require git lfs when no tracked files use LFS"
+  exit 1
+fi
+
+run_checkout "auto" "fresh" "tracked"
+grep -Fxq "clone --no-tags https://x-access-token:token@github.com/acme/widgets.git $workspace|1" "$git_log"
+grep -Fxq "ls-files -z|1" "$git_log"
+grep -Fxq "check-attr -z --stdin filter|1" "$git_log"
+grep -Fxq "lfs version|1" "$git_log"
+grep -Fxq "lfs install --skip-repo|<unset>" "$git_log"
+grep -Fxq "lfs pull|<unset>" "$git_log"

@@ -22,9 +22,9 @@ inputs:
     required: false
     default: ""
   sync_lfs:
-    description: Whether to sync Git LFS assets after checkout without modifying repo hooks.
+    description: Whether to sync Git LFS assets after checkout. Use auto to hydrate only repos with tracked LFS files.
     required: false
-    default: "false"
+    default: "auto"
 
 runs:
   using: composite

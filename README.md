@@ -21,7 +21,7 @@ Behavior:
 - restores the public `origin` URL after authenticated fetches
 - keeps ignored files in place instead of running `git clean -ffdx`
 - skips Git LFS smudge during checkout unless `sync_lfs` is `"true"`
-- optionally syncs Git LFS payloads
+- defaults `sync_lfs` to `"auto"`, which hydrates tracked Git LFS files without requiring Git LFS for repositories that do not use it
 
 Inputs:
 
@@ -30,7 +30,7 @@ Inputs:
 - `requested_sha`: optional SHA from a `repository_dispatch` payload
 - `target_sha`: exact commit SHA to checkout
 - `fallback_ref`: ref to fetch when the target SHA is unavailable
-- `sync_lfs`: set to `"true"` to run `git lfs pull`
+- `sync_lfs`: defaults to `"auto"` to run `git lfs pull` only when tracked files use Git LFS; set to `"true"` to force LFS sync or `"false"` to skip it
 
 Example:
 
@@ -42,7 +42,7 @@ Example:
     requested_sha: ${{ github.event.client_payload.requested_sha }}
     target_sha: ${{ github.sha }}
     fallback_ref: ${{ github.ref }}
-    sync_lfs: "false"
+    sync_lfs: "auto"
 ```
 
 ## Validation

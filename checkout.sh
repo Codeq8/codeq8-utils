@@ -9,11 +9,74 @@ target_sha="${CODE_BOOTSTRAP_TARGET_SHA:-${GITHUB_SHA}}"
 fallback_ref="${CODE_BOOTSTRAP_FALLBACK_REF:-${GITHUB_REF:-}}"
 requested_ref="${CODE_BOOTSTRAP_REQUESTED_REF:-}"
 requested_sha="${CODE_BOOTSTRAP_REQUESTED_SHA:-}"
-sync_lfs="${CODE_BOOTSTRAP_SYNC_LFS:-false}"
+sync_lfs="${CODE_BOOTSTRAP_SYNC_LFS:-auto}"
+
+case "$sync_lfs" in
+  auto|true|false)
+    ;;
+  *)
+    echo "::error::Invalid sync_lfs value '${sync_lfs}'. Expected auto, true, or false."
+    exit 1
+    ;;
+esac
 
 if [ "$sync_lfs" != "true" ]; then
   export GIT_LFS_SKIP_SMUDGE=1
 fi
+
+repo_has_lfs_tracked_files() {
+  local tracked_files
+  local tracked_attrs
+  local found_lfs
+  local attr_path
+  local attr_name
+  local attr_value
+
+  tracked_files="$(mktemp)"
+  tracked_attrs="$(mktemp)"
+  if ! git ls-files -z > "$tracked_files"; then
+    rm -f "$tracked_files" "$tracked_attrs"
+    echo "::error::Unable to list tracked files before Git LFS detection."
+    exit 1
+  fi
+
+  if [ ! -s "$tracked_files" ]; then
+    rm -f "$tracked_files" "$tracked_attrs"
+    return 1
+  fi
+
+  if ! git check-attr -z --stdin filter < "$tracked_files" > "$tracked_attrs"; then
+    rm -f "$tracked_files" "$tracked_attrs"
+    echo "::error::Unable to inspect tracked file attributes before Git LFS detection."
+    exit 1
+  fi
+
+  found_lfs="false"
+  while IFS= read -r -d '' attr_path &&
+    IFS= read -r -d '' attr_name &&
+    IFS= read -r -d '' attr_value; do
+    if [ "$attr_name" = "filter" ] && [ "$attr_value" = "lfs" ]; then
+      found_lfs="true"
+      break
+    fi
+  done < "$tracked_attrs"
+
+  rm -f "$tracked_files" "$tracked_attrs"
+  [ "$found_lfs" = "true" ]
+}
+
+should_sync_lfs() {
+  case "$sync_lfs" in
+    true)
+      return 0
+      ;;
+    false)
+      return 1
+      ;;
+  esac
+
+  repo_has_lfs_tracked_files
+}
 
 if [ -n "$requested_ref" ]; then
   fallback_ref="$requested_ref"
@@ -179,12 +242,13 @@ if ! git config --global --get-all safe.directory | grep -Fxq "$workspace"; then
   git config --global --add safe.directory "$workspace"
 fi
 
-if [ "$sync_lfs" = "true" ]; then
+if should_sync_lfs; then
   if ! git lfs version >/dev/null 2>&1; then
-    echo "::error::Git LFS is required on this runner when sync_lfs=true."
+    echo "::error::Git LFS is required on this runner when sync_lfs=${sync_lfs} and the repository has tracked LFS files."
     exit 1
   fi
 
+  unset GIT_LFS_SKIP_SMUDGE
   git lfs install --skip-repo >/dev/null
   git lfs pull
 fi
